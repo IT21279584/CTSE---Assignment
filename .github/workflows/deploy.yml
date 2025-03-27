@@ -21,6 +21,16 @@ jobs:
     - name: Install Dependencies
       run: npm install
 
+    - name: Create .env file
+      run: |
+        echo "MONGO_URI=${{ secrets.MONGO_URI }}" >> .env
+        echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
+        echo "PORT=${{ secrets.PORT }}" >> .env
+        echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> .env
+        echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> .env
+        echo "AWS_REGION=${{ secrets.AWS_REGION }}" >> .env
+        echo "AWS_BUCKET_NAME=${{ secrets.AWS_BUCKET_NAME }}" >> .env
+
     - name: Run Security Scan (Snyk)
       uses: snyk/actions/node@master
       env:
@@ -33,7 +43,7 @@ jobs:
 
     - name: Login to AWS ECR
       run: |
-        aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ secrets.AWS_ECR_URL }}
+        aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ECR_URL }}
 
     - name: Build and Tag Docker Image
       run: |
