@@ -32,6 +32,20 @@ jobs:
     - name: Install Dependencies
       run: npm install
 
+    - name: Debug Snyk Token
+      run: |
+        if [ -z "${{ secrets.SNYK_TOKEN }}" ]; then
+          echo "SNYK_TOKEN is not set!"
+          exit 1
+        else
+          echo "SNYK_TOKEN is set."
+        fi
+
+    - name: Authenticate Snyk
+      run: snyk auth $SNYK_TOKEN
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
     - name: Run Security Scan (Snyk)
       uses: snyk/actions/node@master
       env:
