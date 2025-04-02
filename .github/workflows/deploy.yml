@@ -32,6 +32,12 @@ jobs:
     - name: Install Dependencies
       run: npm install
 
+    - name: Install Snyk CLI
+      run: npm install -g snyk
+
+    - name: Debug Snyk Installation
+      run: snyk --version || echo "❌ Snyk is not installed"
+
     - name: Debug Snyk Token
       run: |
         if [ -z "${{ secrets.SNYK_TOKEN }}" ]; then
@@ -41,16 +47,11 @@ jobs:
           echo "✅ SNYK_TOKEN is set."
         fi
 
-
-    - name: Authenticate Snyk
-      run: snyk auth $SNYK_TOKEN
-      env:
-        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+    - name: Authenticate with Snyk
+      run: snyk auth ${{ secrets.SNYK_TOKEN }}
 
     - name: Run Security Scan (Snyk)
-      uses: snyk/actions/node@master
-      env:
-        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      run: snyk test
 
     - name: Run Security Scan (SonarCloud)
       uses: sonarsource/sonarcloud-github-action@master
