@@ -44,25 +44,6 @@ jobs:
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
-    - name: Install and Configure SonarScanner
-      run: |
-        sudo apt-get update && sudo apt-get install -y unzip
-        curl -sSLo sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
-        unzip sonar-scanner.zip
-        sudo mv sonar-scanner-*/ /opt/sonar-scanner
-        echo "SONAR_SCANNER_HOME=/opt/sonar-scanner" >> $GITHUB_ENV
-        echo "PATH=/opt/sonar-scanner/bin:$PATH" >> $GITHUB_ENV
-
-    - name: Run SonarCloud Scan
-      run: |
-        sonar-scanner -X \
-          -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }} \
-          -Dsonar.organization=${{ secrets.SONAR_ORG_KEY }} \
-          -Dsonar.host.url=https://sonarcloud.io \
-          -Dsonar.login=${{ secrets.SONAR_TOKEN }}
-      env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v2
       with:
@@ -81,26 +62,6 @@ jobs:
         docker build -t my-auth-service .
         docker tag my-auth-service:latest ${{ secrets.AWS_ECR_URL }}/my-auth-service:latest
         docker push ${{ secrets.AWS_ECR_URL }}/my-auth-service:latest
-
-    - name: Ensure ECS Task Execution Role Exists
-      run: |
-        ROLE_EXISTS=$(aws iam get-role --role-name ecsTaskExecutionRole --query "Role.Arn" --output text 2>/dev/null || echo "not_found")
-        if [ "$ROLE_EXISTS" == "not_found" ]; then
-          aws iam create-role --role-name ecsTaskExecutionRole \
-            --assume-role-policy-document '{
-              "Version": "2012-10-17",
-              "Statement": [{
-                "Effect": "Allow",
-                "Principal": {"Service": "ecs-tasks.amazonaws.com"},
-                "Action": "sts:AssumeRole"
-              }]
-            }' --region ${{ secrets.AWS_REGION }}
-          aws iam attach-role-policy --role-name ecsTaskExecutionRole \
-            --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy \
-            --region ${{ secrets.AWS_REGION }}
-        fi
-        EXECUTION_ROLE_ARN=$(aws iam get-role --role-name ecsTaskExecutionRole --query "Role.Arn" --output text)
-        echo "EXECUTION_ROLE_ARN=$EXECUTION_ROLE_ARN" >> $GITHUB_ENV
 
     - name: Register ECS Task Definition
       run: |
@@ -127,7 +88,7 @@ jobs:
           "requiresCompatibilities": ["FARGATE"],
           "cpu": "256",
           "memory": "512",
-          "executionRoleArn": "$EXECUTION_ROLE_ARN"
+          "executionRoleArn": "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole"
         }
         EOF
         aws ecs register-task-definition --cli-input-json file://task-definition.json --region ${{ secrets.AWS_REGION }}
@@ -138,5 +99,40 @@ jobs:
           aws ecs create-cluster --cluster-name my-ecs-cluster --region ${{ secrets.AWS_REGION }}
         fi
 
+    - name: Ensure ECS Service Exists or Create It
+      run: |
+        ECS_CLUSTER="my-ecs-cluster"
+        ECS_SERVICE="my-auth-service"
+        TASK_DEFINITION="my-auth-service"
+        AWS_REGION="${{ secrets.AWS_REGION }}"
+        SUBNETS="subnet-xxxxxx,subnet-yyyyyy" # Update with actual subnet IDs
+        SECURITY_GROUP="sg-xxxxxx" # Update with actual security group ID
+
+        # Check if ECS service exists
+        SERVICE_EXISTS=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --query "services[0].serviceName" --output text --region "$AWS_REGION" 2>/dev/null || echo "None")
+
+        if [ "$SERVICE_EXISTS" == "None" ]; then
+          echo "ECS Service '$ECS_SERVICE' does not exist. Creating it now..."
+          
+          aws ecs create-service \
+            --cluster "$ECS_CLUSTER" \
+            --service-name "$ECS_SERVICE" \
+            --task-definition "$TASK_DEFINITION" \
+            --desired-count 1 \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUP],assignPublicIp=ENABLED}" \
+            --region "$AWS_REGION"
+
+          echo "ECS Service '$ECS_SERVICE' created successfully."
+        else
+          echo "ECS Service '$ECS_SERVICE' exists. Proceeding with update..."
+        fi
+
     - name: Deploy to AWS ECS
-      run: aws ecs update-service --cluster my-ecs-cluster --service my-auth-service --task-definition my-auth-service --force-new-deployment --region ${{ secrets.AWS_REGION }}
+      run: |
+        aws ecs update-service \
+          --cluster my-ecs-cluster \
+          --service my-auth-service \
+          --task-definition my-auth-service \
+          --force-new-deployment \
+          --region ${{ secrets.AWS_REGION }}
