@@ -142,7 +142,7 @@ jobs:
       run: |
         # Debugging step: List all ECS services in the cluster
         echo "Listing ECS services in the cluster..."
-        aws ecs describe-services --cluster my-ecs-cluster --region ${{ secrets.AWS_REGION }} --query "services[*].serviceName" --output text
+        aws ecs list-services --cluster my-ecs-cluster --region ${{ secrets.AWS_REGION }} --output text
         
         # Check if the service exists
         SERVICE_EXISTS=$(aws ecs describe-services --cluster my-ecs-cluster --services my-auth-service --region ${{ secrets.AWS_REGION }} --query "services[0].status" --output text 2>/dev/null || echo "not_found")
