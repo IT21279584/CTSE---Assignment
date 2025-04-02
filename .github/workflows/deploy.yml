@@ -127,6 +127,7 @@ jobs:
         docker push ${{ secrets.AWS_ECR_URL }}/my-auth-service:latest
 
     # Create ECS Task Definition
+       # Create ECS Task Execution Role
     - name: Create ECS Task Execution Role
       run: |
         # Create IAM role with the necessary policy using an inline trust policy
@@ -150,9 +151,11 @@ jobs:
           --region ${{ secrets.AWS_REGION }}
 
         # Get the role ARN
-        export EXECUTION_ROLE_ARN=$(aws iam get-role --role-name ecsTaskExecutionRole --query "Role.Arn" --output text)
+        EXECUTION_ROLE_ARN=$(aws iam get-role --role-name ecsTaskExecutionRole --query "Role.Arn" --output text)
         echo "Execution Role ARN: $EXECUTION_ROLE_ARN"
-        
+        echo "EXECUTION_ROLE_ARN=$EXECUTION_ROLE_ARN" >> $GITHUB_ENV
+
+    # Create ECS Task Definition
     - name: Create ECS Task Definition
       run: |
         # Create the task definition JSON dynamically
