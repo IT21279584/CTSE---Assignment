@@ -126,6 +126,49 @@ jobs:
       run: |
         docker push ${{ secrets.AWS_ECR_URL }}/my-auth-service:latest
 
+    # Create ECS Task Definition
+    - name: Create ECS Task Definition
+      run: |
+        # Create the task definition JSON dynamically
+        cat > task-definition.json << EOF
+        {
+          "family": "my-auth-service",
+          "networkMode": "awsvpc",
+          "containerDefinitions": [
+            {
+              "name": "my-auth-service-container",
+              "image": "${{ secrets.AWS_ECR_URL }}/my-auth-service:latest",
+              "memory": 512,
+              "cpu": 256,
+              "essential": true,
+              "portMappings": [
+                {
+                  "containerPort": 80,
+                  "hostPort": 80,
+                  "protocol": "tcp"
+                }
+              ],
+              "environment": [
+                {
+                  "name": "MONGO_URI",
+                  "value": "${{ secrets.MONGO_URI }}"
+                },
+                {
+                  "name": "JWT_SECRET",
+                  "value": "${{ secrets.JWT_SECRET }}"
+                }
+              ]
+            }
+          ],
+          "requiresCompatibilities": ["FARGATE"],
+          "cpu": "256",
+          "memory": "512"
+        }
+        EOF
+
+        # Register the task definition using the AWS CLI
+        aws ecs register-task-definition --cli-input-json file://task-definition.json --region ${{ secrets.AWS_REGION }}
+
     # Check and Create ECS Cluster if it doesn't exist
     - name: Check and Create ECS Cluster if it doesn't exist
       run: |
@@ -140,4 +183,5 @@ jobs:
     # Deploy to AWS ECS
     - name: Deploy to AWS ECS
       run: |
-        aws ecs update-service --cluster my-ecs-cluster --service my-auth-service --force-new-deployment --region ${{ secrets.AWS_REGION }}
+        # Update ECS service with the new task definition
+        aws ecs update-service --cluster my-ecs-cluster --service my-auth-service --task-definition my-auth-service --force-new-deployment --region ${{ secrets.AWS_REGION }}
