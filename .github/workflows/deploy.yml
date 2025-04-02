@@ -134,6 +134,7 @@ jobs:
         {
           "family": "my-auth-service",
           "networkMode": "awsvpc",
+          "executionRoleArn": "arn:aws:iam::YOUR_ACCOUNT_ID:role/ecsTaskExecutionRole",  # Add your execution role ARN here
           "containerDefinitions": [
             {
               "name": "my-auth-service-container",
