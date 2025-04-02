@@ -159,6 +159,6 @@ jobs:
             --region ${{ secrets.AWS_REGION }}
         else
           echo "Service exists. Fetching the latest task definition and updating service..."
-          TASK_DEF_ARN=$(aws ecs describe-task-definitions --family-prefix my-auth-service --sort DESC --query "taskDefinitionArns[0]" --output text)
+          TASK_DEF_ARN=$(aws ecs describe-task-definition --task-definition my-auth-service --query "taskDefinition.taskDefinitionArn" --output text)
           aws ecs update-service --cluster my-ecs-cluster --service my-auth-service --task-definition $TASK_DEF_ARN --force-new-deployment --region ${{ secrets.AWS_REGION }}
         fi
