@@ -72,9 +72,20 @@ jobs:
         echo "SONAR_SCANNER_HOME=/opt/sonar-scanner" >> $GITHUB_ENV
         echo "PATH=$SONAR_SCANNER_HOME/bin:$PATH" >> $GITHUB_ENV
 
-    - name: Verify SonarScanner installation
+    - name: Set SonarScanner Home and Reload PATH
       run: |
-        sonar-scanner --version
+        source $GITHUB_ENV  # Reload environment variables
+
+    - name: Check SonarScanner Installation Directory
+      run: |
+        ls /opt/sonar-scanner
+
+    - name: Ensure Permissions for SonarScanner
+      run: |
+        sudo chmod +x /opt/sonar-scanner/bin/sonar-scanner
+
+    - name: Verify SonarScanner installation
+      run: sonar-scanner --version
 
     - name: Run SonarCloud Scan
       run: |
