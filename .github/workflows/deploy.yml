@@ -35,11 +35,12 @@ jobs:
     - name: Debug Snyk Token
       run: |
         if [ -z "${{ secrets.SNYK_TOKEN }}" ]; then
-          echo "SNYK_TOKEN is not set!"
+          echo "❌ SNYK_TOKEN is not set!"
           exit 1
         else
-          echo "SNYK_TOKEN is set."
+          echo "✅ SNYK_TOKEN is set."
         fi
+
 
     - name: Authenticate Snyk
       run: snyk auth $SNYK_TOKEN
