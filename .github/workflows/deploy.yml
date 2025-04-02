@@ -152,7 +152,7 @@ jobs:
             --task-definition my-auth-service \
             --desired-count 1 \
             --launch-type FARGATE \
-            --network-configuration "awsvpcConfiguration={subnets=[subnet-07458b4b776d92114],securityGroups=[sgr-09438d05d3a36e8b9],assignPublicIp=ENABLED}" \
+            --network-configuration "awsvpcConfiguration={subnets=[subnet-07458b4b776d92114],securityGroups=[sg-060652021ac316bf7],assignPublicIp=ENABLED}" \
             --region ${{ secrets.AWS_REGION }}
         else
           echo "Service exists. Fetching the latest task definition and updating service..."
