@@ -129,16 +129,30 @@ jobs:
     # Create ECS Task Definition
     - name: Create ECS Task Execution Role
       run: |
-        # Create IAM role with the necessary policy
-        aws iam create-role --role-name ecsTaskExecutionRole --assume-role-policy-document file://trust-policy.json --region ${{ secrets.AWS_REGION }}
+        # Create IAM role with the necessary policy using an inline trust policy
+        aws iam create-role --role-name ecsTaskExecutionRole \
+          --assume-role-policy-document '{
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole"
+              }
+            ]
+          }' --region ${{ secrets.AWS_REGION }}
         
         # Attach the ECS task execution policy
-        aws iam attach-role-policy --role-name ecsTaskExecutionRole --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy --region ${{ secrets.AWS_REGION }}
+        aws iam attach-role-policy --role-name ecsTaskExecutionRole \
+          --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy \
+          --region ${{ secrets.AWS_REGION }}
 
         # Get the role ARN
         export EXECUTION_ROLE_ARN=$(aws iam get-role --role-name ecsTaskExecutionRole --query "Role.Arn" --output text)
         echo "Execution Role ARN: $EXECUTION_ROLE_ARN"
-
+        
     - name: Create ECS Task Definition
       run: |
         # Create the task definition JSON dynamically
