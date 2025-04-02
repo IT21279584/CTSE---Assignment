@@ -134,7 +134,6 @@ jobs:
         {
           "family": "my-auth-service",
           "networkMode": "awsvpc",
-          "executionRoleArn": "arn:aws:iam::YOUR_ACCOUNT_ID:role/ecsTaskExecutionRole",  # Add your execution role ARN here
           "containerDefinitions": [
             {
               "name": "my-auth-service-container",
@@ -166,6 +165,9 @@ jobs:
           "memory": "512"
         }
         EOF
+
+        # Debug: Print the generated task definition JSON
+        cat task-definition.json
 
         # Register the task definition using the AWS CLI
         aws ecs register-task-definition --cli-input-json file://task-definition.json --region ${{ secrets.AWS_REGION }}
