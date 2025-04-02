@@ -105,8 +105,10 @@ jobs:
     - name: Verify AWS CLI Credentials
       run: aws sts get-caller-identity
 
-    - name: Login to AWS ECR
+    # Debug AWS ECR Login Process
+    - name: Debug AWS ECR Login
       run: |
+        echo "ECR URL: ${{ secrets.AWS_ECR_URL }}"
         aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ECR_URL }}
 
     - name: Build and Tag Docker Image
