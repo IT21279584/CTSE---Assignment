@@ -59,9 +59,15 @@ jobs:
 
     - name: Install SonarScanner
       run: |
+        # Add the SonarScanner repository and install it
         sudo apt-get update
-        sudo apt-get install -y sonar-scanner
-        sonar-scanner --version  # Check the version to confirm successful installation
+        sudo apt-get install -y unzip
+        curl -sSLo sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.8.0.2856-linux.zip
+        unzip sonar-scanner.zip
+        sudo mv sonar-scanner-*/bin/sonar-scanner /usr/local/bin/
+
+        # Verify installation
+        sonar-scanner --version
 
     - name: Run SonarCloud Scan
       run: |
