@@ -81,14 +81,19 @@ jobs:
     - name: Verify SonarScanner installation
       run: sonar-scanner --version
 
+    - name: Debug SonarCloud Variables
+      run: |
+        echo "SONAR_PROJECT_KEY=${{ secrets.SONAR_PROJECT_KEY }}"
+        echo "SONAR_ORG_KEY=${{ secrets.SONAR_ORG_KEY }}"
+
     - name: Run SonarCloud Scan
       run: |
-        sonar-scanner \
+        sonar-scanner -X \
           -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }} \
           -Dsonar.organization=${{ secrets.SONAR_ORG_KEY }} \
           -Dsonar.host.url=https://sonarcloud.io \
           -Dsonar.login=${{ secrets.SONAR_TOKEN }} \
-          -Dsonar.java.jdkHome=$JAVA_HOME  # Point to JDK 17
+          -Dsonar.java.jdkHome=$JAVA_HOME
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
