@@ -164,3 +164,6 @@ jobs:
           # Update service with the latest task definition
           aws ecs update-service --cluster my-ecs-cluster --service my-auth-service --task-definition $TASK_DEF_ARN --force-new-deployment --region ${{ secrets.AWS_REGION }}
         fi
+
+    - name: Deploy to AWS ECS
+      run: aws ecs update-service --cluster my-ecs-cluster --service my-auth-service --task-definition my-auth-service --force-new-deployment --region ${{ secrets.AWS_REGION }}
