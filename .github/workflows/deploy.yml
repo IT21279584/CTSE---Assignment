@@ -57,12 +57,13 @@ jobs:
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
-    - name: Run Security Scan (SonarCloud)
-      uses: sonarsource/sonarqube-scan-action@v5.0.0  # Updated to use newer action version
-      with:
-        sonar-token: ${{ secrets.SONAR_TOKEN }}  # Corrected SonarCloud token usage
-        projectKey: "user-management-service"  # Define your project key
-        organization: "Hansaka Sudusinghe"  # Define your SonarCloud organization
+    - name: Run SonarCloud Scan
+      run: |
+        sonar-scanner \
+          -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }} \
+          -Dsonar.organization=${{ secrets.SONAR_ORG_KEY }} \
+          -Dsonar.host.url=https://sonarcloud.io \
+          -Dsonar.login=${{ secrets.SONAR_TOKEN }}
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
