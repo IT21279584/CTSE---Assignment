@@ -126,6 +126,18 @@ jobs:
       run: |
         docker push ${{ secrets.AWS_ECR_URL }}/my-auth-service:latest
 
+    # Check and Create ECS Cluster if it doesn't exist
+    - name: Check and Create ECS Cluster if it doesn't exist
+      run: |
+        cluster_exists=$(aws ecs describe-clusters --cluster my-ecs-cluster --region ${{ secrets.AWS_REGION }} --query "clusters[0].clusterName" --output text)
+        if [ "$cluster_exists" == "my-ecs-cluster" ]; then
+          echo "ECS Cluster 'my-ecs-cluster' exists."
+        else
+          echo "ECS Cluster 'my-ecs-cluster' does not exist. Creating now..."
+          aws ecs create-cluster --cluster-name my-ecs-cluster --region ${{ secrets.AWS_REGION }}
+        fi
+
+    # Deploy to AWS ECS
     - name: Deploy to AWS ECS
       run: |
-        aws ecs update-service --cluster my-ecs-cluster --service my-auth-service --force-new-deployment
+        aws ecs update-service --cluster my-ecs-cluster --service my-auth-service --force-new-deployment --region ${{ secrets.AWS_REGION }}
