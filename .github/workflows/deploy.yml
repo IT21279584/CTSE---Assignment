@@ -140,7 +140,13 @@ jobs:
 
     - name: Check and Create ECS Service
       run: |
+        # Debugging step: List all ECS services in the cluster
+        echo "Listing ECS services in the cluster..."
+        aws ecs describe-services --cluster my-ecs-cluster --region ${{ secrets.AWS_REGION }} --query "services[*].serviceName" --output text
+    
+        # Check if the service exists
         SERVICE_EXISTS=$(aws ecs describe-services --cluster my-ecs-cluster --services my-auth-service --region ${{ secrets.AWS_REGION }} --query "services[0].status" --output text 2>/dev/null || echo "not_found")
+        
         if [ "$SERVICE_EXISTS" == "not_found" ]; then
           echo "Service does not exist. Creating service..."
           aws ecs create-service \
@@ -152,6 +158,7 @@ jobs:
             --network-configuration "awsvpcConfiguration={subnets=[subnet-abc123],securityGroups=[sg-xyz789],assignPublicIp=ENABLED}" \
             --region ${{ secrets.AWS_REGION }}
         else
-          echo "Service already exists. Updating service..."
-          aws ecs update-service --cluster my-ecs-cluster --service my-auth-service --task-definition my-auth-service --force-new-deployment --region ${{ secrets.AWS_REGION }}
+          echo "Service exists. Fetching the latest task definition and updating service..."
+          TASK_DEF_ARN=$(aws ecs describe-task-definitions --family-prefix my-auth-service --sort DESC --query "taskDefinitionArns[0]" --output text)
+          aws ecs update-service --cluster my-ecs-cluster --service my-auth-service --task-definition $TASK_DEF_ARN --force-new-deployment --region ${{ secrets.AWS_REGION }}
         fi
