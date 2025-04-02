@@ -61,8 +61,8 @@ jobs:
       uses: sonarsource/sonarqube-scan-action@v5.0.0  # Updated to use newer action version
       with:
         sonar-token: ${{ secrets.SONAR_TOKEN }}  # Corrected SonarCloud token usage
-        projectKey: "user-management-service"
-        # Removed the organization field
+        projectKey: "user-management-service"  # Define your project key
+        organization: "Hansaka Sudusinghe"  # Define your SonarCloud organization
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
