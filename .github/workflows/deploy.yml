@@ -96,9 +96,6 @@ jobs:
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-    - name: Debug AWS Region
-      run: echo "AWS Region: ${{ secrets.AWS_REGION }}"
-
     # Configure AWS CLI Credentials
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v2
