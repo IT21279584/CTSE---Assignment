@@ -138,5 +138,20 @@ jobs:
           aws ecs create-cluster --cluster-name my-ecs-cluster --region ${{ secrets.AWS_REGION }}
         fi
 
+    - name: Ensure ECS Service Exists
+      run: |
+        SERVICE_EXISTS=$(aws ecs describe-services --cluster my-ecs-cluster --services my-auth-service --region ${{ secrets.AWS_REGION }} --query "services[0].status" --output text 2>/dev/null || echo "not_found")
+        if [ "$SERVICE_EXISTS" == "not_found" ]; then
+          aws ecs create-service \
+            --cluster my-ecs-cluster \
+            --service-name my-auth-service \
+            --task-definition my-auth-service \
+            --desired-count 1 \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[subnet-abc123],securityGroups=[sg-xyz789],assignPublicIp=ENABLED}" \
+            --region ${{ secrets.AWS_REGION }}
+        fi
+
+
     - name: Deploy to AWS ECS
       run: aws ecs update-service --cluster my-ecs-cluster --service my-auth-service --task-definition my-auth-service --force-new-deployment --region ${{ secrets.AWS_REGION }}
