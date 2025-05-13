@@ -163,7 +163,7 @@ jobs:
             --task-definition my-auth-service \
             --desired-count 1 \
             --launch-type FARGATE \
-            --network-configuration "awsvpcConfiguration={subnets=[subnet-07458b4b776d92114],securityGroups=[sg-060652021ac316bf7],assignPublicIp=ENABLED}" \
+            --network-configuration "awsvpcConfiguration={subnets=[subnet-07458b4b776d92114],securityGroups=[sg-0f78cb0bd9819024e],assignPublicIp=ENABLED}" \
             --region ${{ secrets.AWS_REGION }}
           echo "✅ ECS service created"
         else
