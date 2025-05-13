@@ -13,9 +13,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Define PORT with fallback to 3000 if not set
+const PORT = process.env.PORT || 3000;
+
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 
-const PORT = process.env.PORT;
-
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
