@@ -14,7 +14,7 @@ app.use(cors());
 app.use(express.json());
 
 // Define PORT with fallback to 3000 if not set
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5012;
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
