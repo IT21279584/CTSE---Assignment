@@ -3,7 +3,7 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
-      - main  # Runs when code is pushed to the main branch
+      - main
 
 jobs:
   build-and-deploy:
@@ -18,43 +18,152 @@ jobs:
       with:
         node-version: '18'
 
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
     - name: Create .env File
       run: |
         echo "MONGO_URI=${{ secrets.MONGO_URI }}" >> .env
         echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
         echo "PORT=${{ secrets.PORT }}" >> .env
-        echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> .env
-        echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> .env
         echo "AWS_REGION=${{ secrets.AWS_REGION }}" >> .env
         echo "AWS_BUCKET_NAME=${{ secrets.AWS_BUCKET_NAME }}" >> .env
-        cat .env  # Debugging: Check if .env is created properly
+        cat .env
 
     - name: Install Dependencies
       run: npm install
 
-    - name: Run Security Scan (Snyk)
-      uses: snyk/actions/node@master
+    - name: Install Snyk CLI and Run Security Scan
+      run: |
+        npm install -g snyk
+        snyk auth ${{ secrets.SNYK_TOKEN }}
+        snyk test
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
-    - name: Run Security Scan (SonarCloud)
-      uses: sonarsource/sonarcloud-github-action@master
+    - name: Install and Configure SonarScanner
+      run: |
+        sudo apt-get update && sudo apt-get install -y unzip
+        curl -sSLo sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+        unzip sonar-scanner.zip
+        sudo mv sonar-scanner-*/ /opt/sonar-scanner
+        echo "SONAR_SCANNER_HOME=/opt/sonar-scanner" >> $GITHUB_ENV
+        echo "PATH=/opt/sonar-scanner/bin:$PATH" >> $GITHUB_ENV
+
+    - name: Run SonarCloud Scan
+      run: |
+        sonar-scanner -X \
+          -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }} \
+          -Dsonar.organization=${{ secrets.SONAR_ORG_KEY }} \
+          -Dsonar.host.url=https://sonarcloud.io \
+          -Dsonar.login=${{ secrets.SONAR_TOKEN }}
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-    - name: Login to AWS ECR
-      run: |
-        aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ECR_URL }}
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
 
-    - name: Build and Tag Docker Image
+    - name: Verify AWS CLI Credentials
+      run: aws sts get-caller-identity
+
+    - name: Login to AWS ECR
+      run: aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ECR_URL }}
+
+    - name: Build and Push Docker Image
       run: |
         docker build -t my-auth-service .
         docker tag my-auth-service:latest ${{ secrets.AWS_ECR_URL }}/my-auth-service:latest
-
-    - name: Push Image to AWS ECR
-      run: |
         docker push ${{ secrets.AWS_ECR_URL }}/my-auth-service:latest
 
-    - name: Deploy to AWS ECS
+    - name: Ensure ECS Task Execution Role Exists
       run: |
-        aws ecs update-service --cluster my-ecs-cluster --service my-auth-service --force-new-deployment
+        ROLE_EXISTS=$(aws iam get-role --role-name ecsTaskExecutionRole --query "Role.Arn" --output text 2>/dev/null || echo "not_found")
+        if [ "$ROLE_EXISTS" == "not_found" ]; then
+          aws iam create-role --role-name ecsTaskExecutionRole \
+            --assume-role-policy-document '{
+              "Version": "2012-10-17",
+              "Statement": [{
+                "Effect": "Allow",
+                "Principal": {"Service": "ecs-tasks.amazonaws.com"},
+                "Action": "sts:AssumeRole"
+              }]
+            }' --region ${{ secrets.AWS_REGION }}
+          aws iam attach-role-policy --role-name ecsTaskExecutionRole \
+            --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy \
+            --region ${{ secrets.AWS_REGION }}
+        fi
+        EXECUTION_ROLE_ARN=$(aws iam get-role --role-name ecsTaskExecutionRole --query "Role.Arn" --output text)
+        echo "EXECUTION_ROLE_ARN=$EXECUTION_ROLE_ARN" >> $GITHUB_ENV
+
+    - name: Register ECS Task Definition
+      run: |
+        cat > task-definition.json << EOF
+        {
+          "family": "my-auth-service",
+          "networkMode": "awsvpc",
+          "containerDefinitions": [
+            {
+              "name": "my-auth-service-container",
+              "image": "${{ secrets.AWS_ECR_URL }}/my-auth-service:latest",
+              "memory": 512,
+              "cpu": 256,
+              "essential": true,
+              "portMappings": [
+                { "containerPort": 80, "hostPort": 80, "protocol": "tcp" }
+              ],
+              "environment": [
+                { "name": "MONGO_URI", "value": "${{ secrets.MONGO_URI }}" },
+                { "name": "JWT_SECRET", "value": "${{ secrets.JWT_SECRET }}" }
+              ]
+            }
+          ],
+          "requiresCompatibilities": ["FARGATE"],
+          "cpu": "256",
+          "memory": "512",
+          "executionRoleArn": "$EXECUTION_ROLE_ARN"
+        }
+        EOF
+        aws ecs register-task-definition --cli-input-json file://task-definition.json --region ${{ secrets.AWS_REGION }}
+
+    - name: Ensure ECS Cluster Exists
+      run: |
+        if ! aws ecs describe-clusters --cluster my-ecs-cluster --region ${{ secrets.AWS_REGION }} --query "clusters[0].clusterName" --output text 2>/dev/null | grep -q my-ecs-cluster; then
+          aws ecs create-cluster --cluster-name my-ecs-cluster --region ${{ secrets.AWS_REGION }}
+        fi
+
+    - name: Check and Create ECS Service
+      run: |
+        # Debugging step: List all ECS services in the cluster
+        echo "Listing ECS services in the cluster..."
+        SERVICE_EXISTS=$(aws ecs list-services --cluster my-ecs-cluster --region ${{ secrets.AWS_REGION }} --query "serviceArns" --output text | grep my-auth-service || echo "not_found")
+        
+        if [ "$SERVICE_EXISTS" == "not_found" ]; then
+          echo "Service does not exist. Creating service..."
+          aws ecs create-service \
+            --cluster my-ecs-cluster \
+            --service-name my-auth-service \
+            --task-definition my-auth-service \
+            --desired-count 1 \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[subnet-07458b4b776d92114],securityGroups=[sg-060652021ac316bf7],assignPublicIp=ENABLED}" \
+            --region ${{ secrets.AWS_REGION }}
+        else
+          echo "Service exists. Fetching the latest task definition and updating service..."
+          
+          # Get the latest task definition ARN
+          TASK_DEF_ARN=$(aws ecs describe-task-definition --task-definition my-auth-service --query "taskDefinition.taskDefinitionArn" --output text)
+          echo "Using task definition: $TASK_DEF_ARN"
+          
+          # Update service with the latest task definition
+          aws ecs update-service --cluster my-ecs-cluster --service my-auth-service --task-definition $TASK_DEF_ARN --force-new-deployment --region ${{ secrets.AWS_REGION }}
+        fi
+
+    - name: Deploy to AWS ECS
+      run: aws ecs update-service --cluster my-ecs-cluster --service my-auth-service --task-definition my-auth-service --force-new-deployment --region ${{ secrets.AWS_REGION }}
