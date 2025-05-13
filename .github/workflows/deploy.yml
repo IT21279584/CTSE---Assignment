@@ -32,15 +32,19 @@ jobs:
         echo "AWS_REGION=${{ secrets.AWS_REGION }}" >> .env
         echo "AWS_BUCKET_NAME=${{ secrets.AWS_BUCKET_NAME }}" >> .env
         cat .env
+        if [ $? -eq 0 ]; then echo "✅ .env file created successfully"; else echo "❌ Failed to create .env file"; fi
 
     - name: Install Dependencies
-      run: npm install
+      run: |
+        npm install
+        if [ $? -eq 0 ]; then echo "✅ Dependencies installed successfully"; else echo "❌ Failed to install dependencies"; fi
 
     - name: Install Snyk CLI and Run Security Scan
       run: |
         npm install -g snyk
         snyk auth ${{ secrets.SNYK_TOKEN }}
         snyk test
+        if [ $? -eq 0 ]; then echo "✅ Snyk scan completed successfully"; else echo "❌ Snyk scan failed"; fi
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
@@ -52,6 +56,7 @@ jobs:
         sudo mv sonar-scanner-*/ /opt/sonar-scanner
         echo "SONAR_SCANNER_HOME=/opt/sonar-scanner" >> $GITHUB_ENV
         echo "PATH=/opt/sonar-scanner/bin:$PATH" >> $GITHUB_ENV
+        if [ $? -eq 0 ]; then echo "✅ SonarScanner installed and configured"; else echo "❌ Failed to configure SonarScanner"; fi
 
     - name: Run SonarCloud Scan
       run: |
@@ -60,6 +65,7 @@ jobs:
           -Dsonar.organization=${{ secrets.SONAR_ORG_KEY }} \
           -Dsonar.host.url=https://sonarcloud.io \
           -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+        if [ $? -eq 0 ]; then echo "✅ SonarCloud scan completed"; else echo "❌ SonarCloud scan failed"; fi
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
@@ -71,16 +77,21 @@ jobs:
         aws-region: ${{ secrets.AWS_REGION }}
 
     - name: Verify AWS CLI Credentials
-      run: aws sts get-caller-identity
+      run: |
+        aws sts get-caller-identity
+        if [ $? -eq 0 ]; then echo "✅ AWS credentials verified"; else echo "❌ AWS credentials verification failed"; fi
 
     - name: Login to AWS ECR
-      run: aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ECR_URL }}
+      run: |
+        aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ECR_URL }}
+        if [ $? -eq 0 ]; then echo "✅ Logged in to AWS ECR"; else echo "❌ AWS ECR login failed"; fi
 
     - name: Build and Push Docker Image
       run: |
         docker build -t my-auth-service .
         docker tag my-auth-service:latest ${{ secrets.AWS_ECR_URL }}/my-auth-service:latest
         docker push ${{ secrets.AWS_ECR_URL }}/my-auth-service:latest
+        if [ $? -eq 0 ]; then echo "✅ Docker image built and pushed"; else echo "❌ Docker push failed"; fi
 
     - name: Ensure ECS Task Execution Role Exists
       run: |
@@ -101,6 +112,7 @@ jobs:
         fi
         EXECUTION_ROLE_ARN=$(aws iam get-role --role-name ecsTaskExecutionRole --query "Role.Arn" --output text)
         echo "EXECUTION_ROLE_ARN=$EXECUTION_ROLE_ARN" >> $GITHUB_ENV
+        if [ $? -eq 0 ]; then echo "✅ ECS task execution role is ready"; else echo "❌ Failed to configure ECS task role"; fi
 
     - name: Register ECS Task Definition
       run: |
@@ -131,21 +143,20 @@ jobs:
         }
         EOF
         aws ecs register-task-definition --cli-input-json file://task-definition.json --region ${{ secrets.AWS_REGION }}
+        if [ $? -eq 0 ]; then echo "✅ Task definition registered"; else echo "❌ Failed to register task definition"; fi
 
     - name: Ensure ECS Cluster Exists
       run: |
         if ! aws ecs describe-clusters --cluster my-ecs-cluster --region ${{ secrets.AWS_REGION }} --query "clusters[0].clusterName" --output text 2>/dev/null | grep -q my-ecs-cluster; then
           aws ecs create-cluster --cluster-name my-ecs-cluster --region ${{ secrets.AWS_REGION }}
         fi
+        if [ $? -eq 0 ]; then echo "✅ ECS Cluster is ready"; else echo "❌ Failed to ensure ECS cluster"; fi
 
     - name: Check and Create ECS Service
       run: |
-        # Debugging step: List all ECS services in the cluster
-        echo "Listing ECS services in the cluster..."
         SERVICE_EXISTS=$(aws ecs list-services --cluster my-ecs-cluster --region ${{ secrets.AWS_REGION }} --query "serviceArns" --output text | grep my-auth-service || echo "not_found")
         
         if [ "$SERVICE_EXISTS" == "not_found" ]; then
-          echo "Service does not exist. Creating service..."
           aws ecs create-service \
             --cluster my-ecs-cluster \
             --service-name my-auth-service \
@@ -154,16 +165,14 @@ jobs:
             --launch-type FARGATE \
             --network-configuration "awsvpcConfiguration={subnets=[subnet-07458b4b776d92114],securityGroups=[sg-060652021ac316bf7],assignPublicIp=ENABLED}" \
             --region ${{ secrets.AWS_REGION }}
+          echo "✅ ECS service created"
         else
-          echo "Service exists. Fetching the latest task definition and updating service..."
-          
-          # Get the latest task definition ARN
           TASK_DEF_ARN=$(aws ecs describe-task-definition --task-definition my-auth-service --query "taskDefinition.taskDefinitionArn" --output text)
-          echo "Using task definition: $TASK_DEF_ARN"
-          
-          # Update service with the latest task definition
           aws ecs update-service --cluster my-ecs-cluster --service my-auth-service --task-definition $TASK_DEF_ARN --force-new-deployment --region ${{ secrets.AWS_REGION }}
+          echo "✅ ECS service updated with new task definition"
         fi
 
     - name: Deploy to AWS ECS
-      run: aws ecs update-service --cluster my-ecs-cluster --service my-auth-service --task-definition my-auth-service --force-new-deployment --region ${{ secrets.AWS_REGION }}
+      run: |
+        aws ecs update-service --cluster my-ecs-cluster --service my-auth-service --task-definition my-auth-service --force-new-deployment --region ${{ secrets.AWS_REGION }}
+        if [ $? -eq 0 ]; then echo "✅ Deployment to ECS successful"; else echo "❌ Deployment to ECS failed"; fi
